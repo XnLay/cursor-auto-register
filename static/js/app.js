@@ -1,10 +1,10 @@
 // 全局变量
 const REFRESH_INTERVAL = 10000; // 10秒
 let currentPage = 1;
-const itemsPerPage = 10;
+let itemsPerPage = 10;
 
 // 页面加载完成后执行
-$(document).ready(function() {
+$(document).ready(function () {
     // 初始化应用
     initializeApplication();
 });
@@ -13,13 +13,13 @@ $(document).ready(function() {
 function initializeApplication() {
     // 加载配置
     loadConfig();
-    
+
     // 初始加载数据
     loadAllData();
 
     // 设置定时刷新
     setupTaskRefresh();
-    
+
     // 绑定所有事件处理函数
     bindEventHandlers();
 }
@@ -27,42 +27,54 @@ function initializeApplication() {
 // 事件处理绑定函数 - 将所有事件绑定集中在一起
 function bindEventHandlers() {
     // 按钮事件监听
-    $("#refresh-btn").click(function() {
+    $("#refresh-btn").click(function () {
         showLoading();
         loadAllData();
     });
-    
-    $("#start-registration").click(function() {
+
+    $("#start-registration").click(function () {
         startTaskManually();
     });
-    
-    $("#stop-registration").click(function() {
+
+    $("#stop-registration").click(function () {
         stopTaskManually();
     });
-    
-    $("#search-btn").click(function() {
+
+    $("#search-btn").click(function () {
         filterAccounts();
     });
-    
-    $("#search-input").keypress(function(e) {
+
+    $("#search-input").keypress(function (e) {
         if (e.which === 13) {
             filterAccounts();
         }
     });
-    
+
+    $("#clear-search-btn").click(function () {
+        $("#search-input").val("");
+        filterAccounts();
+    });
+
+    // 监听每页显示数量变化
+    $("#items-per-page").change(function () {
+        itemsPerPage = parseInt($(this).val());
+        currentPage = 1; // 重置为第一页
+        renderAccountsTable();
+    });
+
     // 可以添加更多事件绑定...
 
     // 在bindEventHandlers函数中添加配置相关事件
-    $("#edit-config-btn").click(function() {
+    $("#edit-config-btn").click(function () {
         enableConfigForm(true);
     });
 
-    $("#cancel-config-btn").click(function() {
+    $("#cancel-config-btn").click(function () {
         enableConfigForm(false);
         loadConfig(); // 重新加载配置
     });
 
-    $("#config-form").submit(function(e) {
+    $("#config-form").submit(function (e) {
         e.preventDefault();
         saveConfig();
     });
@@ -88,13 +100,13 @@ function hideLoading() {
 // 加载所有数据
 function loadAllData() {
     showLoading();
-    
+
     // 获取账号数据
     fetch('/accounts')
         .then(res => res.json())
         .then(data => {
             console.log('获取到账号数据:', data); // 添加调试日志
-            
+
             // 检查并处理返回的数据结构
             if (Array.isArray(data)) {
                 accounts = data; // 如果直接是数组
@@ -106,13 +118,13 @@ function loadAllData() {
                 console.error('账号数据格式不正确:', data);
                 accounts = [];
             }
-            
+
             console.log('处理后的账号数据:', accounts);
             filteredAccounts = [...accounts];
-            
+
             // 渲染账号表格
             renderAccountsTable();
-            
+
             // 然后获取任务状态
             return fetch('/registration/status');
         })
@@ -120,7 +132,7 @@ function loadAllData() {
         .then(data => {
             console.log('获取到任务状态:', data);
             updateTaskStatusUI(data);
-            
+
             hideLoading();
         })
         .catch(error => {
@@ -136,9 +148,9 @@ function setupTaskRefresh() {
     if (window.taskRefreshInterval) {
         clearInterval(window.taskRefreshInterval);
     }
-    
+
     // 创建新的10秒定时器
-    window.taskRefreshInterval = setInterval(function() {
+    window.taskRefreshInterval = setInterval(function () {
         // 只刷新任务状态，而不是整个页面
         refreshTaskStatus();
     }, 10000); // 10秒
@@ -160,18 +172,18 @@ function refreshTaskStatus() {
 // 更新任务状态UI函数 - 适配实际API返回的数据结构
 function updateTaskStatusUI(data) {
     console.log('收到任务状态数据:', data); // 保留调试日志
-    
+
     // 数据格式兼容性处理
     const taskStatus = data || {};
-    
+
     // 从正确的嵌套位置获取运行状态和任务状态
     const isRunning = taskStatus.task_status === 'running' || taskStatus.task_status === 'monitoring';
     const taskStatusValue = taskStatus.task_status;
-    
+
     // 更新状态指示器，添加监控模式的样式
     if ($('#registration-status').length) {
         $('#registration-status').removeClass().addClass('badge');
-        
+
         if (taskStatusValue === 'running') {
             $('#registration-status').addClass('bg-success');
         } else if (taskStatusValue === 'monitoring') {
@@ -180,7 +192,7 @@ function updateTaskStatusUI(data) {
             $('#registration-status').addClass('bg-secondary');
         }
     }
-    
+
     // 更新状态文本，添加监控模式文本
     if ($('#registration-status').length) {
         let statusText = '已停止';
@@ -191,21 +203,21 @@ function updateTaskStatusUI(data) {
         }
         $('#registration-status').text(statusText);
     }
-    
+
     // 更新其他状态信息
     if ($('#last-run').length && taskStatus.registration_details?.last_run) {
         $('#last-run').text(new Date(taskStatus.registration_details.last_run).toLocaleString());
     }
-    
+
     if ($('#last-status').length && taskStatus.registration_details?.last_status) {
         $('#last-status').text(taskStatus.registration_details.last_status);
     }
-    
+
     if ($('#next-run').length && taskStatus.registration_details?.next_run) {
         // next_run是Unix时间戳，需要转换
         $('#next-run').text(new Date(taskStatus.registration_details.next_run * 1000).toLocaleString());
     }
-    
+
     // 更新按钮状态 - 监控模式下也禁用启动按钮
     if ($('#start-registration').length && $('#stop-registration').length) {
         if (isRunning) {
@@ -219,38 +231,38 @@ function updateTaskStatusUI(data) {
 
     // 更新统计信息
     const stats = taskStatus.registration_details?.statistics || {};
-    
+
     if ($('#total-runs').length) {
         $('#total-runs').text(stats.total_runs || 0);
     }
-    
+
     if ($('#successful-runs').length) {
         $('#successful-runs').text(stats.successful_runs || 0);
     }
-    
+
     if ($('#failed-runs').length) {
         $('#failed-runs').text(stats.failed_runs || 0);
     }
-    
+
     if ($('#success-rate').length) {
         $('#success-rate').text(stats.success_rate || '0%');
     }
-    
+
     // 更新剩余槽位信息
     if ($('#remaining-slots').length) {
         $('#remaining-slots').text(taskStatus.remaining_slots || 0);
     }
-    
+
     if ($('#current-count').length) {
         $('#current-count').text(taskStatus.active_count || taskStatus.current_count || 0);
     }
-    
+
     if ($('#max-accounts').length) {
         $('#max-accounts').text(taskStatus.max_accounts || 0);
     }
 
     updateTaskStatusDisplay(data);
-    
+
     // 添加状态消息显示
     if ($('#status-message').length) {
         if (taskStatus.status_message) {
@@ -276,35 +288,50 @@ function updateTaskStatusUI(data) {
 function renderAccountsTable() {
     const accountsBody = $('#accounts-tbody');
     accountsBody.empty();
-    
+
     console.log(`准备渲染账号表格，共${filteredAccounts.length}条数据`);
-    
+
     if (filteredAccounts.length === 0) {
         // 添加空状态提示
+        const searchTerm = $("#search-input").val();
+        let emptyMessage = '暂无账号数据';
+
+        if (searchTerm) {
+            emptyMessage = `没有找到与 "${searchTerm}" 匹配的账号`;
+        }
+
         accountsBody.html(`
             <tr>
-                <td colspan="7" class="text-center py-4">
+                <td colspan="8" class="text-center py-4">
                     <div class="py-5">
-                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">暂无账号数据</p>
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">${emptyMessage}</p>
+                        ${searchTerm ? '<button id="clear-search-results" class="btn btn-sm btn-outline-secondary mt-2">清除搜索</button>' : ''}
                     </div>
                 </td>
             </tr>
         `);
+
+        // 绑定清除搜索结果按钮事件
+        $("#clear-search-results").click(function () {
+            $("#search-input").val("");
+            filterAccounts();
+        });
+
         return;
     }
-    
+
     // 计算当前页的数据
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, filteredAccounts.length);
     const currentPageData = filteredAccounts.slice(startIndex, endIndex);
-    
+
     console.log(`当前页数据: ${currentPageData.length}条 (第${currentPage}页)`);
-    
+
     // 渲染每行数据
     currentPageData.forEach((account, index) => {
         console.log(`渲染账号: ${account.email}`);
-        
+
         // 完整的行模板，包含所有单元格内容
         const row = `
             <tr id="account-row-${account.id}" data-status="${account.status}" 
@@ -333,18 +360,18 @@ function renderAccountsTable() {
                 </td>
                 <td class="operation-column">
                     <div class="d-flex flex-wrap gap-1">
-                        ${account.status !== 'active' ? 
-                            `<button class="btn btn-sm btn-outline-success status-action" data-email="${account.email}" data-id="${account.id}" data-status="active" title="设为正常">
+                        ${account.status !== 'active' ?
+                `<button class="btn btn-sm btn-outline-success status-action" data-email="${account.email}" data-id="${account.id}" data-status="active" title="设为正常">
                                 <i class="fas fa-check-circle"></i>
                             </button>` : ''}
                             
-                        ${account.status !== 'disabled' ? 
-                            `<button class="btn btn-sm btn-outline-warning status-action" data-email="${account.email}" data-id="${account.id}" data-status="disabled" title="停用账号">
+                        ${account.status !== 'disabled' ?
+                `<button class="btn btn-sm btn-outline-warning status-action" data-email="${account.email}" data-id="${account.id}" data-status="disabled" title="停用账号">
                                 <i class="fas fa-pause-circle"></i>
                             </button>` : ''}
                             
-                        ${account.status !== 'deleted' ? 
-                            `<button class="btn btn-sm btn-outline-danger status-action" data-email="${account.email}" data-id="${account.id}" data-status="deleted" title="标记删除">
+                        ${account.status !== 'deleted' ?
+                `<button class="btn btn-sm btn-outline-danger status-action" data-email="${account.email}" data-id="${account.id}" data-status="deleted" title="标记删除">
                                 <i class="fas fa-times-circle"></i>
                             </button>` : ''}
                             
@@ -357,7 +384,7 @@ function renderAccountsTable() {
         `;
         accountsBody.append(row);
     });
-    
+
     // 绑定事件
     bindTableEvents();
     renderPagination();
@@ -368,14 +395,23 @@ function renderPagination() {
     const totalPages = Math.ceil(filteredAccounts.length / itemsPerPage);
     const pagination = $("#pagination");
     pagination.empty();
-    
+
     if (totalPages <= 1) {
         return;
     }
-    
+
     const paginationNav = $('<nav aria-label="Page navigation"></nav>');
     const paginationUl = $('<ul class="pagination"></ul>');
-    
+
+    // 首页按钮
+    paginationUl.append(`
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" aria-label="First" ${currentPage !== 1 ? 'onclick="changePage(1); return false;"' : ''}>
+                <span aria-hidden="true">&laquo;&laquo;</span>
+            </a>
+        </li>
+    `);
+
     // 上一页按钮
     paginationUl.append(`
         <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
@@ -384,16 +420,62 @@ function renderPagination() {
             </a>
         </li>
     `);
-    
-    // 页码按钮
-    for (let i = 1; i <= totalPages; i++) {
+
+    // 页码按钮 - 使用省略号优化显示
+    const maxVisiblePages = 5; // 最多显示的页码数
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    // 调整startPage，确保显示足够多的页码
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // 显示第一页
+    if (startPage > 1) {
+        paginationUl.append(`
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="changePage(1); return false;">1</a>
+            </li>
+        `);
+
+        // 如果第一页和开始页之间有间隔，添加省略号
+        if (startPage > 2) {
+            paginationUl.append(`
+                <li class="page-item disabled">
+                    <a class="page-link" href="#">...</a>
+                </li>
+            `);
+        }
+    }
+
+    // 渲染中间的页码
+    for (let i = startPage; i <= endPage; i++) {
         paginationUl.append(`
             <li class="page-item ${currentPage === i ? 'active' : ''}">
                 <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
-            </li>·
+            </li>
         `);
     }
-    
+
+    // 显示最后一页
+    if (endPage < totalPages) {
+        // 如果结束页和最后一页之间有间隔，添加省略号
+        if (endPage < totalPages - 1) {
+            paginationUl.append(`
+                <li class="page-item disabled">
+                    <a class="page-link" href="#">...</a>
+                </li>
+            `);
+        }
+
+        paginationUl.append(`
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a>
+            </li>
+        `);
+    }
+
     // 下一页按钮
     paginationUl.append(`
         <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
@@ -402,9 +484,24 @@ function renderPagination() {
             </a>
         </li>
     `);
-    
+
+    // 末页按钮
+    paginationUl.append(`
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" aria-label="Last" ${currentPage !== totalPages ? 'onclick="changePage(' + totalPages + '); return false;"' : ''}>
+                <span aria-hidden="true">&raquo;&raquo;</span>
+            </a>
+        </li>
+    `);
+
+    // 添加页码信息
+    const pageInfoText = $(`<div class="ms-3 d-flex align-items-center small text-muted">
+        第 ${currentPage} 页 / 共 ${totalPages} 页 (${filteredAccounts.length} 条记录)
+    </div>`);
+
     paginationNav.append(paginationUl);
     pagination.append(paginationNav);
+    pagination.append(pageInfoText);
 }
 
 // 更改页码
@@ -419,7 +516,7 @@ function filterAccounts() {
     if (!searchTerm) {
         filteredAccounts = [...accounts];
     } else {
-        filteredAccounts = accounts.filter(account => 
+        filteredAccounts = accounts.filter(account =>
             account.email.toLowerCase().includes(searchTerm) ||
             account.user.toLowerCase().includes(searchTerm)
         );
@@ -472,13 +569,13 @@ function getAccountUsage(email) {
                         </div>
                     </div>
                 `);
-                
+
                 $('body').append(modal);
                 const modalInstance = new bootstrap.Modal(modal[0]);
                 modalInstance.show();
-                
+
                 // 模态框关闭时移除DOM
-                modal[0].addEventListener('hidden.bs.modal', function() {
+                modal[0].addEventListener('hidden.bs.modal', function () {
                     modal.remove();
                 });
             }
@@ -499,17 +596,17 @@ function updateAccountUsageLimit(email, usageLimit) {
         },
         body: JSON.stringify({ usage_limit: usageLimit })
     })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            console.log(`账号 ${email} 用量数据已更新到数据库`);
-        } else {
-            console.error(`更新账号 ${email} 用量数据失败:`, data.message);
-        }
-    })
-    .catch(error => {
-        console.error(`更新账号 ${email} 用量数据时发生错误:`, error);
-    });
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`账号 ${email} 用量数据已更新到数据库`);
+            } else {
+                console.error(`更新账号 ${email} 用量数据失败:`, data.message);
+            }
+        })
+        .catch(error => {
+            console.error(`更新账号 ${email} 用量数据时发生错误:`, error);
+        });
 }
 
 // 修复任务状态更新问题
@@ -518,27 +615,27 @@ function startTaskManually() {
     fetch('/registration/start', {
         method: 'GET'
     })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showAlert('定时任务已成功启动', 'success');
-            
-            // 立即更新任务状态 - 添加这段代码
-            fetch('/registration/status')
-                .then(res => res.json())
-                .then(statusData => {
-                    updateTaskStatusUI(statusData);
-                });
-        } else {
-            showAlert(`启动任务失败: ${data.message || '未知错误'}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('启动任务时发生错误:', error);
-        hideLoading();
-        showAlert('启动任务失败，请稍后重试', 'danger');
-    });
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert('定时任务已成功启动', 'success');
+
+                // 立即更新任务状态 - 添加这段代码
+                fetch('/registration/status')
+                    .then(res => res.json())
+                    .then(statusData => {
+                        updateTaskStatusUI(statusData);
+                    });
+            } else {
+                showAlert(`启动任务失败: ${data.message || '未知错误'}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('启动任务时发生错误:', error);
+            hideLoading();
+            showAlert('启动任务失败，请稍后重试', 'danger');
+        });
 }
 
 // 同样添加到停止任务函数
@@ -547,27 +644,27 @@ function stopTaskManually() {
     fetch('/registration/stop', {
         method: 'GET'
     })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showAlert('定时任务已成功停止', 'success');
-            
-            // 立即更新任务状态 - 添加这段代码
-            fetch('/registration/status')
-                .then(res => res.json())
-                .then(statusData => {
-                    updateTaskStatusUI(statusData);
-                });
-        } else {
-            showAlert(`停止任务失败: ${data.message || '未知错误'}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('停止任务时发生错误:', error);
-        hideLoading();
-        showAlert('停止任务失败，请稍后重试', 'danger');
-    });
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert('定时任务已成功停止', 'success');
+
+                // 立即更新任务状态 - 添加这段代码
+                fetch('/registration/status')
+                    .then(res => res.json())
+                    .then(statusData => {
+                        updateTaskStatusUI(statusData);
+                    });
+            } else {
+                showAlert(`停止任务失败: ${data.message || '未知错误'}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('停止任务时发生错误:', error);
+            hideLoading();
+            showAlert('停止任务失败，请稍后重试', 'danger');
+        });
 }
 
 // 复制到剪贴板
@@ -583,19 +680,19 @@ function copyToClipboard(text) {
 // 显示通知
 function showAlert(message, type, isSpecial = false) {
     const alertId = 'alert-' + Date.now();
-    const alertClass = isSpecial ? 
-        `alert-${type} special-alert animate__animated animate__bounceIn` : 
+    const alertClass = isSpecial ?
+        `alert-${type} special-alert animate__animated animate__bounceIn` :
         `alert-${type} animate__animated animate__fadeInRight`;
-    
+
     const alert = $(`
         <div id="${alertId}" class="alert ${alertClass} alert-dismissible fade show" role="alert">
             ${isSpecial ? '<i class="fas fa-star me-2"></i>' : ''}${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     `);
-    
+
     $("#alert-container").append(alert);
-    
+
     // 5秒后自动消失
     setTimeout(() => {
         $(`#${alertId}`).alert('close');
@@ -605,18 +702,18 @@ function showAlert(message, type, isSpecial = false) {
 // 日期时间格式化
 function formatDateTime(dateTimeString) {
     if (!dateTimeString) return '-';
-    
+
     try {
         const date = new Date(dateTimeString);
         if (isNaN(date.getTime())) return dateTimeString;
-        
+
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const day = date.getDate().toString().padStart(2, '0');
         const hours = date.getHours().toString().padStart(2, '0');
         const minutes = date.getMinutes().toString().padStart(2, '0');
         const seconds = date.getSeconds().toString().padStart(2, '0');
-        
+
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     } catch (error) {
         return dateTimeString;
@@ -626,14 +723,14 @@ function formatDateTime(dateTimeString) {
 // 修改掩码函数，增加对用户名的特殊处理
 function maskText(text, showChars = 6, isUsername = false) {
     if (!text) return '';
-    
+
     // 用户名特殊处理 - 只显示前1/3
     if (isUsername) {
         const showLength = Math.ceil(text.length / 3);
         if (text.length <= showLength) return text;
         return `${text.substring(0, showLength)}...`;
     }
-    
+
     // 其他文本使用标准处理
     if (text.length <= showChars) return text;
     return `${text.substring(0, showChars)}...`;
@@ -646,17 +743,17 @@ function maskPassword(password) {
 }
 
 // 页面加载动画
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // 修改动画类添加代码，删除对已删除元素的引用
     const elements = [
-        {selector: '.card', animation: 'animate__fadeIn', delay: 0.2}
+        { selector: '.card', animation: 'animate__fadeIn', delay: 0.2 }
     ];
-    
+
     elements.forEach(item => {
         const elems = document.querySelectorAll(item.selector);
         elems.forEach((el, index) => {
             el.classList.add('animate__animated', item.animation);
-            
+
             if (item.delay) {
                 const delay = item.stagger ? item.delay * (index + 1) : item.delay;
                 el.style.animationDelay = `${delay}s`;
@@ -670,23 +767,23 @@ const Fireworks = {
     canvas: null,
     ctx: null,
     particles: [],
-    
-    init: function() {
+
+    init: function () {
         this.canvas = document.getElementById('fireworks-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
     },
-    
-    resizeCanvas: function() {
+
+    resizeCanvas: function () {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
     },
-    
-    start: function() {
+
+    start: function () {
         this.canvas.style.display = 'block';
         this.particles = [];
-        
+
         // 创建5次烟花，间隔300ms
         for (let i = 0; i < 5; i++) {
             setTimeout(() => {
@@ -695,18 +792,18 @@ const Fireworks = {
                 this.createParticles(x, y);
             }, i * 300);
         }
-        
+
         this.animate();
-        
+
         // 5秒后停止动画
         setTimeout(() => {
             this.canvas.style.display = 'none';
         }, 5000);
     },
-    
-    createParticles: function(x, y) {
+
+    createParticles: function (x, y) {
         const colors = ['#ff595e', '#ffca3a', '#8ac926', '#1982c4', '#6a4c93'];
-        
+
         for (let i = 0; i < 80; i++) {
             const particle = {
                 x: x,
@@ -720,31 +817,31 @@ const Fireworks = {
                 alpha: 1,
                 decay: Math.random() * 0.02 + 0.01
             };
-            
+
             this.particles.push(particle);
         }
     },
-    
-    animate: function() {
+
+    animate: function () {
         if (this.particles.length === 0) return;
-        
+
         requestAnimationFrame(() => this.animate());
-        
+
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
+
         for (let i = 0; i < this.particles.length; i++) {
             const p = this.particles[i];
-            
+
             // 添加重力
             p.velocity.y += 0.05;
-            
+
             // 更新位置
             p.x += p.velocity.x;
             p.y += p.velocity.y;
-            
+
             // 减少透明度
             p.alpha -= p.decay;
-            
+
             // 绘制粒子
             this.ctx.save();
             this.ctx.globalAlpha = p.alpha;
@@ -753,7 +850,7 @@ const Fireworks = {
             this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.restore();
-            
+
             // 移除消失的粒子
             if (p.alpha <= 0) {
                 this.particles.splice(i, 1);
@@ -769,71 +866,71 @@ Fireworks.init();
 // 绑定表格交互事件
 function bindTableEvents() {
     // 显示/隐藏用户名
-    $('.toggle-username').off('click').on('click', function() {
+    $('.toggle-username').off('click').on('click', function () {
         const username = $(this).data('username');
         const usernameText = $(this).prev('.username-text');
-        
+
         if (usernameText.text() === username) {
             usernameText.text(maskText(username, 6, true));
         } else {
             usernameText.text(username);
         }
     });
-    
+
     // 显示/隐藏密码
-    $('.toggle-password').off('click').on('click', function() {
+    $('.toggle-password').off('click').on('click', function () {
         const password = $(this).data('password');
         const passwordText = $(this).prev('.password-text');
-        
+
         if (passwordText.text() === password) {
             passwordText.text(maskPassword(password));
         } else {
             passwordText.text(password);
         }
     });
-    
+
     // 显示/隐藏Token
-    $('.toggle-token').off('click').on('click', function() {
+    $('.toggle-token').off('click').on('click', function () {
         const token = $(this).data('token');
         const tokenText = $(this).prev('.token-text');
-        
+
         if (tokenText.text() === token) {
             tokenText.text(maskText(token));
         } else {
             tokenText.text(token);
         }
     });
-    
+
     // 复制按钮
-    $('.copy-btn').off('click').on('click', function() {
+    $('.copy-btn').off('click').on('click', function () {
         const textToCopy = $('#tokenFullText').val();
         copyToClipboard(textToCopy);
     });
-    
+
     // 获取用量按钮
-    $('.get-usage-btn').off('click').on('click', function() {
+    $('.get-usage-btn').off('click').on('click', function () {
         const email = $(this).data('email');
         getAccountUsage(email);
     });
 
     // 删除按钮
-    $('.delete-account-btn').off('click').on('click', function() {
+    $('.delete-account-btn').off('click').on('click', function () {
         const email = $(this).data('email');
         const id = $(this).data('id');
         $('#deleteEmailConfirm').text(email);
         $('#deleteIdConfirm').text(id || '无');
-        
+
         // 重置并重新绑定确认删除按钮事件
-        $('#confirmDeleteBtn').off('click').on('click', function() {
+        $('#confirmDeleteBtn').off('click').on('click', function () {
             deleteAccount(email, id, true);
         });
-        
+
         const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
         deleteModal.show();
     });
 
     // 状态操作按钮
-    $('.status-action').off('click').on('click', function(e) {
+    $('.status-action').off('click').on('click', function (e) {
         e.preventDefault();
         const email = $(this).data('email');
         const id = $(this).data('id');
@@ -842,46 +939,46 @@ function bindTableEvents() {
     });
 
     // 查看Token按钮
-    $('.view-token-btn').off('click').on('click', function() {
+    $('.view-token-btn').off('click').on('click', function () {
         const token = $(this).data('token');
         const accountId = $(this).data('account-id');
         $('#tokenFullText').val(token);
         $('#useTokenBtn').data('account-id', accountId);
         new bootstrap.Modal(document.getElementById('tokenViewModal')).show();
     });
-    
+
     // 使用Token按钮
-    $('#useTokenBtn').off('click').on('click', function() {
+    $('#useTokenBtn').off('click').on('click', function () {
         const accountId = $(this).data('account-id');
         if (!accountId) {
             showAlert('账号ID无效', 'danger');
             return;
         }
-        
+
         showLoading();
         fetch(`/account/use-token/${accountId}`, {
             method: 'POST'
         })
-        .then(res => res.json())
-        .then(data => {
-            hideLoading();
-            if (data.success) {
-                showAlert(data.message, 'success');
-                $('#tokenViewModal').modal('hide');
-            } else {
-                showAlert(`使用Token失败: ${data.message || '未知错误'}`, 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('使用Token时发生错误:', error);
-            hideLoading();
-            showAlert('使用Token失败，请稍后重试', 'danger');
-        });
+            .then(res => res.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    $('#tokenViewModal').modal('hide');
+                } else {
+                    showAlert(`使用Token失败: ${data.message || '未知错误'}`, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('使用Token时发生错误:', error);
+                hideLoading();
+                showAlert('使用Token失败，请稍后重试', 'danger');
+            });
     });
 }
 
 // 更新删除确认按钮事件处理
-$('#confirmDeleteBtn').click(function() {
+$('#confirmDeleteBtn').click(function () {
     const email = $(this).data('email');
     const id = $(this).data('id');
     deleteAccount(email, id, true);
@@ -891,10 +988,10 @@ $('#confirmDeleteBtn').click(function() {
 function updateAccountStatus(email, id, status) {
     showLoading();
     // 优先使用ID API，如果ID存在的话
-    const apiUrl = id ? 
-        `/account/id/${id}/status` : 
+    const apiUrl = id ?
+        `/account/id/${id}/status` :
         `/account/${encodeURIComponent(email)}/status`;
-    
+
     fetch(apiUrl, {
         method: 'PUT',
         headers: {
@@ -902,57 +999,57 @@ function updateAccountStatus(email, id, status) {
         },
         body: JSON.stringify({ status: status })  // 确保这里的字段名是status
     })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            let statusText = '';
-            if (status === 'active') statusText = '正常';
-            else if (status === 'disabled') statusText = '停用';
-            else if (status === 'deleted') statusText = '删除';
-            
-            showAlert(`账号${id ? '(ID:'+id+')' : ''} ${email} 已成功设置为${statusText}状态`, 'success');
-            loadAllData();
-        } else {
-            showAlert(`更新账号状态失败: ${data.message || '未知错误'}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('更新账号状态时发生错误:', error);
-        hideLoading();
-        showAlert('更新账号状态失败，请稍后重试', 'danger');
-    });
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                let statusText = '';
+                if (status === 'active') statusText = '正常';
+                else if (status === 'disabled') statusText = '停用';
+                else if (status === 'deleted') statusText = '删除';
+
+                showAlert(`账号${id ? '(ID:' + id + ')' : ''} ${email} 已成功设置为${statusText}状态`, 'success');
+                loadAllData();
+            } else {
+                showAlert(`更新账号状态失败: ${data.message || '未知错误'}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('更新账号状态时发生错误:', error);
+            hideLoading();
+            showAlert('更新账号状态失败，请稍后重试', 'danger');
+        });
 }
 
 // 修改deleteAccount函数，支持通过ID删除
 function deleteAccount(email, id, hardDelete = true) {
     showLoading();
     // 优先使用ID API，如果ID存在的话
-    const apiUrl = id ? 
-        `/account/id/${id}${hardDelete ? '?hard_delete=true' : ''}` : 
+    const apiUrl = id ?
+        `/account/id/${id}${hardDelete ? '?hard_delete=true' : ''}` :
         `/account/${encodeURIComponent(email)}${hardDelete ? '?hard_delete=true' : ''}`;
-    
+
     fetch(apiUrl, {
         method: 'DELETE'
     })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showAlert(`账号${id ? '(ID:'+id+')' : ''} ${email} 已成功删除`, 'success');
-            // 关闭模态框
-            $('#deleteConfirmModal').modal('hide');
-            // 重新加载账号列表
-            loadAllData();
-        } else {
-            showAlert(`删除账号失败: ${data.message || '未知错误'}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('删除账号时发生错误:', error);
-        hideLoading();
-        showAlert('删除账号失败，请稍后重试', 'danger');
-    });
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert(`账号${id ? '(ID:' + id + ')' : ''} ${email} 已成功删除`, 'success');
+                // 关闭模态框
+                $('#deleteConfirmModal').modal('hide');
+                // 重新加载账号列表
+                loadAllData();
+            } else {
+                showAlert(`删除账号失败: ${data.message || '未知错误'}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('删除账号时发生错误:', error);
+            hideLoading();
+            showAlert('删除账号失败，请稍后重试', 'danger');
+        });
 }
 
 // 添加强制刷新函数
@@ -964,11 +1061,11 @@ function forceRefreshData() {
 // 完全重构额度显示函数，精确匹配参考代码
 function renderUsageProgress(usageLimit) {
     // 计算使用进度
-    const premiumUsed =  150 - usageLimit;
+    const premiumUsed = 150 - usageLimit;
     const premiumTotal = 150;
     const premiumRemaining = premiumTotal - premiumUsed;
     const premiumPercent = Math.round((premiumUsed / premiumTotal) * 100);
-    
+
     return `
         <td class="usage-info">
             <div class="usage-numbers">
@@ -1018,10 +1115,10 @@ function loadConfig() {
                 const config = data.data;
                 $("#browser-headless").val(config.BROWSER_HEADLESS.toString());
                 $("#dynamic-useragent").prop('checked', config.DYNAMIC_USERAGENT || false);
-                
+
                 // 触发动态UA的change事件
                 $("#dynamic-useragent").trigger('change');
-                
+
                 $("#browser-useragent").val(config.BROWSER_USER_AGENT);
                 $("#accounts-limit").val(config.MAX_ACCOUNTS);
                 $("#email-domains").val(config.EMAIL_DOMAINS);
@@ -1044,7 +1141,7 @@ function loadConfig() {
 function saveConfig() {
     showLoading();
     const isDynamicUA = $("#dynamic-useragent").prop('checked');
-    
+
     const config = {
         BROWSER_HEADLESS: $("#browser-headless").val() === 'true',
         DYNAMIC_USERAGENT: isDynamicUA,
@@ -1056,7 +1153,7 @@ function saveConfig() {
         BROWSER_PATH: $("#browser-path").val(),
         CURSOR_PATH: $("#cursor-path").val()
     };
-    
+
     fetch('/config', {
         method: 'PUT',
         headers: {
@@ -1064,21 +1161,21 @@ function saveConfig() {
         },
         body: JSON.stringify(config)
     })
-    .then(res => res.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            showAlert('配置已成功保存', 'success');
-            enableConfigForm(false); // 禁用编辑状态
-        } else {
-            showAlert(`保存配置失败: ${data.message || '未知错误'}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('保存配置时发生错误:', error);
-        hideLoading();
-        showAlert('保存配置失败，请稍后重试', 'danger');
-    });
+        .then(res => res.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showAlert('配置已成功保存', 'success');
+                enableConfigForm(false); // 禁用编辑状态
+            } else {
+                showAlert(`保存配置失败: ${data.message || '未知错误'}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('保存配置时发生错误:', error);
+            hideLoading();
+            showAlert('保存配置失败，请稍后重试', 'danger');
+        });
 }
 
 // 启用/禁用配置表单
@@ -1102,7 +1199,7 @@ function enableConfigForm(enable) {
 }
 
 // 动态User-Agent切换逻辑
-$("#dynamic-useragent").change(function() {
+$("#dynamic-useragent").change(function () {
     const isDynamicUA = $(this).prop('checked');
     if (isDynamicUA) {
         $("#browser-useragent").prop('disabled', true);
@@ -1121,21 +1218,21 @@ function updateTaskStatusDisplay(statusData) {
     const statusBadge = $("#registration-status");
     const taskStatusText = $("#task-status-text");
     const taskIcon = $("#task-status i");
-    
+
     // 更新账号使用情况
     $("#current-count").text(statusData.current_count);
     $("#max-accounts").text(statusData.max_accounts);
     $("#remaining-slots").text(`剩余: ${statusData.remaining_slots}`);
-    
+
     // 计算使用百分比并更新电池进度条
     const usagePercent = Math.floor((statusData.current_count / statusData.max_accounts) * 100);
     $(".battery-progress").attr("data-percent", usagePercent);
     $(".battery-percent").text(`${usagePercent}%`);
-    
+
     // 更新任务详情
     if (statusData.registration_details) {
         const details = statusData.registration_details;
-        
+
         // 更新统计信息
         if (details.statistics) {
             $("#total-runs").text(details.statistics.total_runs);
@@ -1144,22 +1241,22 @@ function updateTaskStatusDisplay(statusData) {
             $("#success-rate").text(details.statistics.success_rate);
         }
     }
-    
+
     console.log('task_status=>', statusData.task_status)
     // 根据任务状态更新UI，删除暂停状态处理
-    switch(statusData.task_status) {
+    switch (statusData.task_status) {
         case "running":
             statusBadge.removeClass("bg-success bg-warning bg-danger").addClass("bg-primary");
             statusBadge.text("运行中");
             taskStatusText.text("任务正在运行中");
             taskIcon.removeClass("fa-check-circle fa-pause-circle fa-times-circle").addClass("fa-spinner fa-spin");
             taskIcon.removeClass("text-success text-warning text-danger").addClass("text-primary");
-            
+
             // 只保留隐藏开始按钮和显示停止按钮的逻辑
             $("#start-registration").hide();
             $("#stop-registration").show();
             break;
-            
+
         case "stopped":
         default:
             statusBadge.removeClass("bg-primary bg-warning bg-danger").addClass("bg-success");
@@ -1167,13 +1264,13 @@ function updateTaskStatusDisplay(statusData) {
             taskStatusText.text(statusData.status_message || "系统空闲中，可以开始新任务");
             taskIcon.removeClass("fa-spinner fa-spin fa-pause-circle fa-times-circle").addClass("fa-check-circle");
             taskIcon.removeClass("text-primary text-warning text-danger").addClass("text-success");
-            
+
             // 只保留显示开始按钮和隐藏停止按钮的逻辑
             $("#start-registration").show();
             $("#stop-registration").hide();
             break;
     }
-    
+
     // 处理显示/隐藏注册详情面板
     if (statusData.task_status === "running") {
         $("#registration-details").show();
